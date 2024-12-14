@@ -4,6 +4,7 @@ import numpy as np
 import keyboard
 import blackwhitesolver
 from skimage.metrics import structural_similarity as ssim
+from colouredfieldreader import read_coloured_field_from_image
 
 has_found_bottom_left = False
 has_found_top_right = False
@@ -14,6 +15,7 @@ field_top_right = (0, 0)
 border = (4, 4) # left, top
 size = (12, 12) # x,y
 
+
 def main():
     global size
     global border
@@ -22,18 +24,51 @@ def main():
     keyboard.hook(on_key_press)
 
     # Taking input for border
-    left_border = int(input("Please enter the left border: "))
-    top_border = int(input("Please enter the top border: "))
-    border = (left_border, top_border)
+    if input("Use previous data? (y/n): ") == "y":
+        # Load data from previous runs from a file
+        with open("data.txt", "r") as file:
+            left_border = int(file.readline())
+            top_border = int(file.readline())
+            border = (left_border, top_border)
+            width = int(file.readline())
+            height = int(file.readline())
+            coloured = file.readline() == "True\n"
+            num_colours = int(file.readline())
+            size = (width, height)
+    else:
+        left_border = int(input("Please enter the left border: "))
+        top_border = int(input("Please enter the top border: "))
+        border = (left_border, top_border)
 
-    # Taking input for size
-    width = int(input("Please enter the width of the field: "))
-    height = int(input("Please enter the height of the field: "))
-    size = (width, height)
+        # Taking input for size
+        width = int(input("Please enter the width of the field: "))
+        height = int(input("Please enter the height of the field: "))
+        size = (width, height)
 
-    field_img = find_field_region()
-    
-    field = read_field_from_image(field_img)
+        coloured = input("Is this a coloured field? (y/n): ") == "y"
+        if coloured:
+            num_colours = int(input("Please enter the number of colours: "))
+        else:
+            num_colours = 0
+
+        # Writing this input for loading later
+        with open("data.txt", "w") as file:
+            file.write(f"{left_border}\n")
+            file.write(f"{top_border}\n")
+            file.write(f"{width}\n")
+            file.write(f"{height}\n")
+            file.write(f"{coloured}\n")
+            file.write(f"{num_colours}\n")
+
+    print("Reading coloured field")
+    if coloured:
+        field_img, colours_img = find_field_region_coloured(num_colours)
+        field, colours = read_coloured_field_from_image(field_img, colours_img, num_colours, size, border)
+        print(colours)
+    else:
+        field_img = find_field_region()
+        field = read_field_from_image(field_img)
+
     blackwhitesolver.solve(field, get_square_position, False)
 
 def capture_screen(region):
@@ -133,6 +168,53 @@ def find_field_region():
     display_image(cropped_image)
 
     return gray_cropped
+
+def find_field_region_coloured(num_colours):
+    global bottom_left
+    global top_right
+    global field_bottom_left
+    global field_top_right
+    global has_found_top_right
+    print("Ready to find the field!")
+    print("Please put the mouse to the bottom left of the bottom left corner of the field, and press C")
+    while(not has_found_top_right):
+        continue
+    
+    # Set the region you want to capture (x, y, width, height)
+    x = bottom_left[0]
+    y = top_right[1]
+    w = top_right[0] - bottom_left[0]
+    h = bottom_left[1] - top_right[1]
+    capture_region = (x, y, w, h)
+
+    # Capture the screen
+    captured_image = capture_screen(capture_region)
+
+    gray = cv2.cvtColor(captured_image, cv2.COLOR_RGB2GRAY)
+    ret, binary_image = cv2.threshold(gray, 127, 255, cv2.THRESH_BINARY)
+
+    field_bottom_left, field_top_right = find_corners(binary_image)
+
+    #print(f'{field_bottom_left[1]}:{field_top_right[1]}, {field_bottom_left[0]}:{field_top_right[0]}')
+
+    border_width = 2
+
+    cropped_image = captured_image[field_top_right[1]+border_width:field_bottom_left[1]-border_width, field_bottom_left[0]+border_width:field_top_right[0]-border_width]
+    gray_cropped = gray[field_top_right[1]+border_width:field_bottom_left[1]-border_width, field_bottom_left[0]+border_width:field_top_right[0]-border_width]
+    
+    field_bottom_left = (x + field_bottom_left[0]+border_width, y + field_bottom_left[1]-border_width)
+    field_top_right = (x + field_top_right[0]-border_width, y + field_top_right[1]+border_width)
+
+    # Reading the colours
+    colour_dist = 48
+    colours_cropped = capture_screen((field_bottom_left[0], field_top_right[1] - int(colour_dist * 1.5), num_colours * colour_dist, colour_dist))
+
+    display_image(colours_cropped)
+
+    # Display the captured image
+    display_image(cropped_image)
+
+    return cropped_image, colours_cropped
 
 def read_field_from_image(image):
     global size

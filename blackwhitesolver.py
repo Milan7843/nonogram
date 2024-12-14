@@ -2,6 +2,8 @@ import numpy as np
 import keyboard
 import pyautogui
 
+import PerformanceTest as pt
+
 intermediate_progress = False
 
 def solve(field, get_square_position, show_progress):
@@ -15,23 +17,33 @@ def solve(field, get_square_position, show_progress):
 
     intermediate_progress = show_progress
 
+    iteration_index = 0
+
+    pt.add("solve")
+
     while (True):
         if keyboard.is_pressed('c'):
             break
 
-        state = iteration(field, state, rows_done, cols_done, get_square_position)
+        state = iteration(field, state, rows_done, cols_done, get_square_position, iteration_index)
 
         rows_done, cols_done = mark_rows_cols_as_done(state, rows_done, cols_done)
 
         print_progress(state)
 
+        iteration_index += 1
+
         if (all(rows_done == 1) and all(cols_done == 1)):
             print(f'Crossword completed!')
             break
 
+    pt.add("solve")
+
     if (not intermediate_progress):
         fill_in_all(state, get_square_position)
     
+    pt.print_performance_hierarchy()
+
     return
 
 def fill_in_all(state, get_square_position):
@@ -105,40 +117,80 @@ def drag_squares(from_x, from_y, to_x, to_y, get_square_position):
 def print_progress(state):
     print(f'Progress: {np.count_nonzero(state)} / {(len(state) * len(state[0]))} ({int((np.count_nonzero(state)) / (len(state) * len(state[0])) * 100)}%)')
 
-def iteration(field, state, rows_done, cols_done, get_square_position):
+
+
+def iteration(field, state, rows_done, cols_done, get_square_position, iteration_index):
     rows = field[0]
     columns = field[1]
     size = field[2]
 
+    do_big_only = iteration_index < 3
+
+    print(f'Iteration {iteration_index+1} (big: {do_big_only})')
+
+    values_to_sort = []
     for i, row in enumerate(rows):
-        if (rows_done[i] == 1):
+        # If the row is already done, we don't need to sort it
+        if rows_done[i] == 1:
+            values_to_sort.append(-100000)
             continue
-        if keyboard.is_pressed('c'):
-            break
-        
-        common_filled_squares, common_unfilled_squares = common_squares(row, size[0], True, i, state)
-        for col in range(size[0]):
-            if keyboard.is_pressed('c'):
-                break
-            if (common_filled_squares[col] == 1):
-                state = mark_square_filled(state, col, i, get_square_position)
-            if (common_unfilled_squares[col] == 1):
-                state = mark_square_empty(state, col, i, get_square_position)
+        values_to_sort.append(np.sum(row) + len(row) - 1 + np.count_nonzero(state[:, i]))
 
     for i, col in enumerate(columns):
-        if (cols_done[i] == 1):
+        # If the column is already done, we don't need to sort it
+        if cols_done[i] == 1:
+            values_to_sort.append(-100000)
             continue
+        values_to_sort.append(np.sum(col) + len(col) - 1 + np.count_nonzero(state[i, :]))
+    
+    print(rows)
+    print(columns)
+    print(values_to_sort)
+
+    indices = np.argsort(-np.array(values_to_sort))
+
+    for j, i in enumerate(indices):
+        if do_big_only and j > 40:
+            break
+
         if keyboard.is_pressed('c'):
             break
 
-        common_filled_squares, common_unfilled_squares = common_squares(col, size[1], False, i, state)
-        for row in range(size[1]):
-            if keyboard.is_pressed('c'):
-                break
-            if (common_filled_squares[row] == 1):
-                state = mark_square_filled(state, i, row, get_square_position)
-            if (common_unfilled_squares[row] == 1):
-                state = mark_square_empty(state, i, row, get_square_position)
+        is_row = i < len(rows)
+        if not is_row:
+            i -= len(rows)
+
+        if (is_row):
+            if (rows_done[i] == 1):
+                continue
+            
+            common_filled_squares, common_unfilled_squares = common_squares(rows[i], size[0], True, i, state)
+            for col in range(size[0]):
+                if keyboard.is_pressed('c'):
+                    break
+                if (common_filled_squares[col] == 1):
+                    state = mark_square_filled(state, col, i, get_square_position)
+                if (common_unfilled_squares[col] == 1):
+                    state = mark_square_empty(state, col, i, get_square_position)
+
+            print(f'{i+1} / {len(rows)} rows')
+
+        else:
+            if (cols_done[i] == 1):
+                continue
+
+            common_filled_squares, common_unfilled_squares = common_squares(columns[i], size[1], False, i, state)
+            for row in range(size[1]):
+                if keyboard.is_pressed('c'):
+                    break
+                if (common_filled_squares[row] == 1):
+                    state = mark_square_filled(state, i, row, get_square_position)
+                if (common_unfilled_squares[row] == 1):
+                    state = mark_square_empty(state, i, row, get_square_position)
+
+            print(f'{i+1} / {len(columns)} cols')
+            
+
     return state
 
 def mark_rows_cols_as_done(state, rows_done, cols_done):
@@ -210,10 +262,25 @@ def generate_configurations(blocks, width, configs, is_row, row_col_index, state
             new_spaces_used = spaces_used + current_block + 1 + i
             generate_configurations(blocks, width, configs, is_row, row_col_index, state, new_config, new_spaces_used, index+1)
 
+def generate_configurations_big(blocks, width, configs, is_row, row_col_index, state):
+
+    if (np.sum(blocks) < width * 0.4 or len(blocks) > 5):
+        configs.append(np.ones(shape=(width), dtype=int) * 2)
+        return
+    
+    generate_configurations(blocks, width, configs, is_row, row_col_index, state)
+    return
+
 
 def common_squares(blocks, width, is_row, row_col_index, state):
     configurations = []
+    configurations_iter = []
+    # print("starting generation")
+    pt.add("generate configurations")
     generate_configurations(blocks, width, configurations, is_row, row_col_index, state)
+    pt.add("generate configurations")
+    # print(f"equal: {configurations == configurations_iter}")
+    # print(f"finished generating {len(configurations)} configurations")
     
     # Check for common squares in all configurations
     common_filled_squares = [1 if all(config[i] == 1 for config in configurations) else 0 for i in range(width)]
@@ -222,10 +289,15 @@ def common_squares(blocks, width, is_row, row_col_index, state):
     return common_filled_squares, common_unfilled_squares
 
 def is_valid_check_to_index(config, check_to_index, is_row, row_col_index, state):
+    pt.add("validity check")
     if (is_row):
-        return is_valid_row(config, check_to_index, row_col_index, state)
+        valid = is_valid_row(config, check_to_index, row_col_index, state)
+        pt.add("validity check")
+        return valid
     else:
-        return is_valid_col(config, check_to_index, row_col_index, state)
+        valid = is_valid_col(config, check_to_index, row_col_index, state)
+        pt.add("validity check")
+        return valid
 
 def is_valid(config, is_row, row_col_index, state):
     if (is_row):
