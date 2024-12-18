@@ -127,6 +127,8 @@ def iteration(field, state, rows_done, cols_done, get_square_position, iteration
     do_big_only = iteration_index < 3
 
     print(f'Iteration {iteration_index+1} (big: {do_big_only})')
+    
+    pt.add("determine order")
 
     values_to_sort = []
     for i, row in enumerate(rows):
@@ -142,12 +144,10 @@ def iteration(field, state, rows_done, cols_done, get_square_position, iteration
             values_to_sort.append(-100000)
             continue
         values_to_sort.append(np.sum(col) + len(col) - 1 + np.count_nonzero(state[i, :]))
-    
-    print(rows)
-    print(columns)
-    print(values_to_sort)
 
     indices = np.argsort(-np.array(values_to_sort))
+    
+    pt.add("determine order")
 
     for j, i in enumerate(indices):
         if do_big_only and j > 40:
@@ -165,6 +165,8 @@ def iteration(field, state, rows_done, cols_done, get_square_position, iteration
                 continue
             
             common_filled_squares, common_unfilled_squares = common_squares(rows[i], size[0], True, i, state)
+
+            pt.add("marking squares")
             for col in range(size[0]):
                 if keyboard.is_pressed('c'):
                     break
@@ -172,6 +174,7 @@ def iteration(field, state, rows_done, cols_done, get_square_position, iteration
                     state = mark_square_filled(state, col, i, get_square_position)
                 if (common_unfilled_squares[col] == 1):
                     state = mark_square_empty(state, col, i, get_square_position)
+            pt.add("marking squares")
 
             print(f'{i+1} / {len(rows)} rows')
 
@@ -180,6 +183,8 @@ def iteration(field, state, rows_done, cols_done, get_square_position, iteration
                 continue
 
             common_filled_squares, common_unfilled_squares = common_squares(columns[i], size[1], False, i, state)
+            
+            pt.add("marking squares")
             for row in range(size[1]):
                 if keyboard.is_pressed('c'):
                     break
@@ -187,6 +192,7 @@ def iteration(field, state, rows_done, cols_done, get_square_position, iteration
                     state = mark_square_filled(state, i, row, get_square_position)
                 if (common_unfilled_squares[row] == 1):
                     state = mark_square_empty(state, i, row, get_square_position)
+            pt.add("marking squares")
 
             print(f'{i+1} / {len(columns)} cols')
             
@@ -233,8 +239,10 @@ def generate_configurations(blocks, width, configs, is_row, row_col_index, state
 
     if (index == len(blocks)):
         #print(f'final: {current_config}')
-        if (is_valid(current_config, is_row, row_col_index, state)):
-            configs.append(current_config)
+        #if (is_valid(current_config, is_row, row_col_index, state)):
+        pt.add("create copy + append")
+        configs.append(np.copy(current_config))
+        pt.add("create copy + append")
         return
 
     if (len(current_config) == 0):
@@ -254,13 +262,21 @@ def generate_configurations(blocks, width, configs, is_row, row_col_index, state
     #print(f'current: {current_block}, left: {squares_left}, to place: {squares_still_to_place}, spaces used: {spaces_used}, possible configurations: {possible_configs}')
 
     for i in range(0, possible_configs):
-        new_config = np.copy(current_config)
-        for s in range(current_block):
-            new_config[i+s+spaces_used] = 1
+        start = spaces_used + i
+        end = start + current_block
+        current_config[start:end] = 1
 
-        if (is_valid_check_to_index(new_config, i+current_block+spaces_used, is_row, row_col_index, state)):
+        check_to_index = i+current_block+spaces_used
+
+        if (index == len(blocks)-1):
+            check_to_index = width
+
+        if (is_valid_check_to_index(current_config, check_to_index, is_row, row_col_index, state)):
             new_spaces_used = spaces_used + current_block + 1 + i
-            generate_configurations(blocks, width, configs, is_row, row_col_index, state, new_config, new_spaces_used, index+1)
+            generate_configurations(blocks, width, configs, is_row, row_col_index, state, current_config, new_spaces_used, index+1)
+
+        # Backtrack
+        current_config[start:end] = 0
 
 def generate_configurations_big(blocks, width, configs, is_row, row_col_index, state):
 
@@ -283,8 +299,10 @@ def common_squares(blocks, width, is_row, row_col_index, state):
     # print(f"finished generating {len(configurations)} configurations")
     
     # Check for common squares in all configurations
+    pt.add("common squares")
     common_filled_squares = [1 if all(config[i] == 1 for config in configurations) else 0 for i in range(width)]
     common_unfilled_squares = [1 if all(config[i] == 0 for config in configurations) else 0 for i in range(width)]
+    pt.add("common squares")
     
     return common_filled_squares, common_unfilled_squares
 
@@ -307,24 +325,24 @@ def is_valid(config, is_row, row_col_index, state):
     
 def is_valid_row(row, check_to_index, row_index, state):
     for i in range(check_to_index):
-        # make sure that every value is legal
-        if (state[i, row_index] == 2): # marked as empty already
-            if (row[i] == 1): # but the row wasn't empty
-                return False
-        if (state[i, row_index] == 1): # marked as filled already
-            if (row[i] == 0): # but the row was empty
-                return False
+        state_val = state[i, row_index]
+        row_val = row[i]
+
+        if state_val == 2 and row_val == 1:  # Marked as empty but row not empty
+            return False
+        if state_val == 1 and row_val == 0:  # Marked as filled but row empty
+            return False
 
     return True
 
 def is_valid_col(col, check_to_index, col_index, state):
     for i in range(check_to_index):
-        # make sure that every value is legal
-        if (state[col_index, i] == 2): # marked as empty already
-            if (col[i] == 1): # but the row wasn't empty
-                return False
-        if (state[col_index, i] == 1): # marked as filled already
-            if (col[i] == 0): # but the row was empty
-                return False
+        state_val = state[col_index, i]
+        col_val = col[i]
+
+        if state_val == 2 and col_val == 1:  # Marked as empty but row not empty
+            return False
+        if state_val == 1 and col_val == 0:  # Marked as filled but row empty
+            return False
 
     return True
