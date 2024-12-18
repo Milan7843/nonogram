@@ -5,9 +5,13 @@ import pyautogui
 import PerformanceTest as pt
 
 intermediate_progress = False
+previous_configurations = []
+has_previous_configuration = []
 
 def solve(field, get_square_position, show_progress):
     global intermediate_progress
+    global previous_configurations
+    global has_previous_configuration
 
     print("Starting the solving process! Press C at any time to cancel")
 
@@ -20,6 +24,10 @@ def solve(field, get_square_position, show_progress):
     iteration_index = 0
 
     pt.add("solve")
+
+    previous_configurations = [[0]] * len(rows_done) + [[0]] * len(cols_done)
+    for i in range(len(previous_configurations)):
+        has_previous_configuration.append(False)
 
     while (True):
         if keyboard.is_pressed('c'):
@@ -120,6 +128,7 @@ def print_progress(state):
 
 
 def iteration(field, state, rows_done, cols_done, get_square_position, iteration_index):
+    
     rows = field[0]
     columns = field[1]
     size = field[2]
@@ -136,14 +145,14 @@ def iteration(field, state, rows_done, cols_done, get_square_position, iteration
         if rows_done[i] == 1:
             values_to_sort.append(-100000)
             continue
-        values_to_sort.append(np.sum(row) + len(row) - 1 + np.count_nonzero(state[:, i]))
+        values_to_sort.append(np.sum(row) - len(row) + np.count_nonzero(state[:, i]))
 
     for i, col in enumerate(columns):
         # If the column is already done, we don't need to sort it
         if cols_done[i] == 1:
             values_to_sort.append(-100000)
             continue
-        values_to_sort.append(np.sum(col) + len(col) - 1 + np.count_nonzero(state[i, :]))
+        values_to_sort.append(np.sum(col) - len(col) + np.count_nonzero(state[i, :]))
 
     indices = np.argsort(-np.array(values_to_sort))
     
@@ -156,6 +165,8 @@ def iteration(field, state, rows_done, cols_done, get_square_position, iteration
         if keyboard.is_pressed('c'):
             break
 
+        previous_configurations_index = i
+
         is_row = i < len(rows)
         if not is_row:
             i -= len(rows)
@@ -164,7 +175,7 @@ def iteration(field, state, rows_done, cols_done, get_square_position, iteration
             if (rows_done[i] == 1):
                 continue
             
-            common_filled_squares, common_unfilled_squares = common_squares(rows[i], size[0], True, i, state)
+            common_filled_squares, common_unfilled_squares = common_squares(rows[i], size[0], True, i, state, previous_configurations_index)
 
             pt.add("marking squares")
             for col in range(size[0]):
@@ -176,13 +187,13 @@ def iteration(field, state, rows_done, cols_done, get_square_position, iteration
                     state = mark_square_empty(state, col, i, get_square_position)
             pt.add("marking squares")
 
-            print(f'{i+1} / {len(rows)} rows')
+            print(f'{i+1} / {len(rows)} rows ({j+1} / {len(indices)})')
 
         else:
             if (cols_done[i] == 1):
                 continue
 
-            common_filled_squares, common_unfilled_squares = common_squares(columns[i], size[1], False, i, state)
+            common_filled_squares, common_unfilled_squares = common_squares(columns[i], size[1], False, i, state, previous_configurations_index)
             
             pt.add("marking squares")
             for row in range(size[1]):
@@ -194,8 +205,7 @@ def iteration(field, state, rows_done, cols_done, get_square_position, iteration
                     state = mark_square_empty(state, i, row, get_square_position)
             pt.add("marking squares")
 
-            print(f'{i+1} / {len(columns)} cols')
-            
+            print(f'{i+1} / {len(columns)} cols ({j+1} / {len(indices)})')
 
     return state
 
@@ -287,13 +297,34 @@ def generate_configurations_big(blocks, width, configs, is_row, row_col_index, s
     generate_configurations(blocks, width, configs, is_row, row_col_index, state)
     return
 
+def generate_configurations_outer(blocks, width, configs, is_row, row_col_index, state, previous_config_index):
+    
+    global previous_configurations
+    global has_previous_configuration
 
-def common_squares(blocks, width, is_row, row_col_index, state):
+    if has_previous_configuration[previous_config_index]:
+        #print(previous_configurations[previous_config_index])
+        pt.add("previous configurations")
+        for config in previous_configurations[previous_config_index]:
+            if (is_valid(config, is_row, row_col_index, state)):
+                configs.append(np.copy(config))
+        pt.add("previous configurations")
+    
+    else:
+        pt.add("new configurations")
+        generate_configurations(blocks, width, configs, is_row, row_col_index, state)
+        has_previous_configuration[previous_config_index] = True
+        previous_configurations[previous_config_index] = configs
+        pt.add("new configurations")
+
+
+def common_squares(blocks, width, is_row, row_col_index, state, previous_config_index):
     configurations = []
     configurations_iter = []
     # print("starting generation")
     pt.add("generate configurations")
-    generate_configurations(blocks, width, configurations, is_row, row_col_index, state)
+    generate_configurations_outer(blocks, width, configurations, is_row, row_col_index, state, previous_config_index)
+    
     pt.add("generate configurations")
     # print(f"equal: {configurations == configurations_iter}")
     # print(f"finished generating {len(configurations)} configurations")
