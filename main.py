@@ -3,8 +3,10 @@ import pyautogui
 import numpy as np
 import keyboard
 import blackwhitesolver
+import colouredsolver
 from skimage.metrics import structural_similarity as ssim
 from colouredfieldreader import read_coloured_field_from_image
+import PerformanceTest as pt
 
 has_found_bottom_left = False
 has_found_top_right = False
@@ -19,6 +21,10 @@ size = (12, 12) # x,y
 def main():
     global size
     global border
+    global has_found_bottom_left
+    global has_found_top_right
+    global bottom_left
+    global top_right
 
     # Display the captured image on 'c' key press
     keyboard.hook(on_key_press)
@@ -34,6 +40,10 @@ def main():
             height = int(file.readline())
             coloured = file.readline() == "True\n"
             num_colours = int(file.readline())
+            bottom_left = (int(file.readline()), int(file.readline()))
+            top_right = (int(file.readline()), int(file.readline()))
+            has_found_bottom_left = True
+            has_found_top_right = True
             size = (width, height)
     else:
         left_border = int(input("Please enter the left border: "))
@@ -60,16 +70,16 @@ def main():
             file.write(f"{coloured}\n")
             file.write(f"{num_colours}\n")
 
-    print("Reading coloured field")
     if coloured:
         field_img, colours_img = find_field_region_coloured(num_colours)
         field, colours = read_coloured_field_from_image(field_img, colours_img, num_colours, size, border)
-        print(colours)
+        colouredsolver.solve(field, get_square_position, False, len(colours))
     else:
         field_img = find_field_region()
         field = read_field_from_image(field_img)
-
-    blackwhitesolver.solve(field, get_square_position, False)
+        blackwhitesolver.solve(field, get_square_position, False)
+    
+    pt.print_performance_hierarchy()
 
 def capture_screen(region):
     screenshot = pyautogui.screenshot(region=region)
@@ -209,8 +219,6 @@ def find_field_region_coloured(num_colours):
     colour_dist = 48
     colours_cropped = capture_screen((field_bottom_left[0], field_top_right[1] - int(colour_dist * 1.5), num_colours * colour_dist, colour_dist))
 
-    display_image(colours_cropped)
-
     # Display the captured image
     display_image(cropped_image)
 
@@ -326,12 +334,18 @@ def on_key_press(key):
             bottom_left = mouse_position
             print(f"Bottom left found: {mouse_position}")
             has_found_bottom_left = True
+            with open("data.txt", "a") as file:
+                file.write(f"{bottom_left[0]}\n")
+                file.write(f"{bottom_left[1]}\n")
             print("Now put the mouse to the top right of the top right corner of the field, and press C")
         elif (not has_found_top_right):
             mouse_position = get_mouse_position()
             top_right = mouse_position
             print(f"Top right found: {mouse_position}")
             has_found_top_right = True
+            with open("data.txt", "a") as file:
+                file.write(f"{top_right[0]}\n")
+                file.write(f"{top_right[1]}\n")
     
 
 # Finds the corners of the mask
