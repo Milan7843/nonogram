@@ -202,7 +202,7 @@ def get_number_from_square(img, colours):
 
     #display_image(resized_img)
 
-    for i in range(1, 12):
+    for i in range(1, 100):
         if np.sum(colour) == 218*3:
             continue
 
@@ -230,7 +230,7 @@ def get_number_from_square(img, colours):
 
     #print(f'{best_match_index} with score {best_match_score}, colour: {colour} ({colour_index})')
     
-    #display_image(img)
+    #display_image(resized_img)
 
     #display_image(resized_img, f'Best match: {best_match_index}')
 

@@ -301,21 +301,21 @@ def iteration(field, state, rows_done, cols_done, get_square_position, iteration
         if rows_done[i] == 1:
             values_to_sort.append(-100000)
             continue
-        values_to_sort.append(np.sum(val[0] for val in row) + len(row) - 1 + np.count_nonzero(state[:, i]))
+        values_to_sort.append(np.sum(val[0] for val in row) - len(row))
 
     for i, col in enumerate(columns):
         # If the column is already done, we don't need to sort it
         if cols_done[i] == 1:
             values_to_sort.append(-100000)
             continue
-        values_to_sort.append(np.sum(col) + len(col) - 1 + np.count_nonzero(state[i, :]))
+        values_to_sort.append(np.sum(val[0] for val in col) - len(col))
     
     #print(rows)
     #print(columns)
     #print(values_to_sort)
     print_state(state)
 
-    indices = np.arange(len(rows) + len(columns))#np.argsort(-np.array(values_to_sort))
+    indices = np.argsort(-np.array(values_to_sort))
 
     for j, i in enumerate(indices):
         #if do_big_only and j > 40:
@@ -341,7 +341,7 @@ def iteration(field, state, rows_done, cols_done, get_square_position, iteration
                 if (common_unfilled_squares[col] == 1):
                     state = mark_square_empty(state, col, i, get_square_position)
 
-            #print(f'{i+1} / {len(rows)} rows')
+            print(f'{i+1} / {len(rows)} rows')
 
         else:
             if (cols_done[i] == 1):
@@ -356,7 +356,7 @@ def iteration(field, state, rows_done, cols_done, get_square_position, iteration
                 if (common_unfilled_squares[row] == 1):
                     state = mark_square_empty(state, i, row, get_square_position)
 
-            #print(f'{i+1} / {len(columns)} cols')
+            print(f'{i+1} / {len(columns)} cols')
 
         #print_state(state)
             
