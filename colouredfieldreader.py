@@ -9,7 +9,7 @@ def read_coloured_field_from_image(image, colours_image, num_colours, size, bord
 
     pt.add("reading field")
 
-    #generate_dataset_images(99)
+    generate_dataset_images(99)
     colours = read_colours(colours_image, num_colours)
     
     square_size_y = image.shape[0] / (border[1]+size[1])
@@ -28,7 +28,7 @@ def read_coloured_field_from_image(image, colours_image, num_colours, size, bord
             y_min = int(row * square_size_y)+1
             y_max = int((row+1) * square_size_y)-2
             square = image[y_min:y_max, x_min:x_max]
-            num, color_index = get_number_from_square(square, colours)
+            num, color_index = get_number_from_square(square, colours, size[1])
             if (num != 0):
                 column.append((num, color_index))
         columns.append(column)
@@ -46,12 +46,15 @@ def read_coloured_field_from_image(image, colours_image, num_colours, size, bord
             x_min = int(col * square_size_x)
             x_max = int((col+1) * square_size_x)
             square = image[y_min:y_max, x_min:x_max]
-            num, color_index = get_number_from_square(square, colours)
+            num, color_index = get_number_from_square(square, colours, size[0])
             if (num != 0):
                 row.append((num, color_index))
         rows.append(row)
 
     field = (rows, columns, size)
+
+    print(rows)
+    print(columns)
 
     pt.add("reading field")
 
@@ -73,53 +76,61 @@ def read_colours(image, num_colours):
 
 def generate_dataset_images(max):
     for i in range(1, max+1):
-        # Create a blank image with white background
-        width, height = 14, 14  # Dimensions of the image
-        background_color = (255, 255, 255)  # White background
-        image = Image.new("RGB", (width, height), color=background_color)
+        generate_dataset_image(i, False)
+        generate_dataset_image(i, True)
 
-        # Initialize the drawing context
-        draw = ImageDraw.Draw(image)
+def generate_dataset_image(num, bold=False):
+    # Create a blank image with white background
+    width, height = 14, 14  # Dimensions of the image
+    background_color = (255, 255, 255)  # White background
+    image = Image.new("RGB", (width, height), color=background_color)
 
-        # Define the text and font
-        text = f"{i}"
-        font_size = 11
+    # Initialize the drawing context
+    draw = ImageDraw.Draw(image)
 
-        try:
-            # Load a TrueType font (you can replace this path with any .ttf file)
-            font = ImageFont.truetype("arial.ttf", font_size)
-        except IOError:
-            # Fallback if the font file is not available
-            font = ImageFont.load_default()
+    # Define the text and font
+    text = f"{num}"
+    font_size = 11
 
-        spacing = -1.0
-        
-        # Calculate manual letter placement
-        letter_positions = []
-        x = 0  # Start at x=0 for calculating total width
-        for char in text:
-            bbox = draw.textbbox((0, 0), char, font=font)
-            char_width = bbox[2] - bbox[0]  # Width of the character
-            letter_positions.append((char, x))
-            x += char_width + spacing  # Add custom spacing
+    try:
+        # Load a TrueType font (you can replace this path with any .ttf file)
+        font = ImageFont.truetype("arialbd.ttf" if bold else "arial.ttf", font_size)
+    except IOError:
+        # Fallback if the font file is not available
+        font = ImageFont.load_default()
 
-        # Compute total text width after manual spacing
-        total_text_width = letter_positions[-1][1] + char_width
+    spacing = 0.0
 
-        # Calculate starting position to center the text
-        text_x = (width - total_text_width) // 2
-        text_y = (height - font_size) // 2
+    if not bold:
+        if num == 11:
+            spacing = -1.0
+    
+    # Calculate manual letter placement
+    letter_positions = []
+    x = 0  # Start at x=0 for calculating total width
+    for char in text:
+        bbox = draw.textbbox((0, 0), char, font=font)
+        char_width = bbox[2] - bbox[0]  # Width of the character
+        letter_positions.append((char, x))
+        x += char_width + spacing  # Add custom spacing
 
-        # Draw each character manually with custom spacing
-        for char, offset_x in letter_positions:
-            draw.text((text_x + offset_x, text_y), char, fill=(0, 0, 0), font=font)
+    # Compute total text width after manual spacing
+    total_text_width = letter_positions[-1][1] + char_width
 
-        # Save the image
-        output_path = f"temp/{i}.png"
-        image.save(output_path)
+    # Calculate starting position to center the text
+    text_x = (width - total_text_width) // 2
+    text_y = (height - font_size) // 2
 
-def get_dataset_img(num, background_colour, text_colour):
-    image = cv2.imread(f'temp/{num}.png')
+    # Draw each character manually with custom spacing
+    for char, offset_x in letter_positions:
+        draw.text((text_x + offset_x, text_y), char, fill=(0, 0, 0), font=font)
+
+    # Save the image
+    output_path = f"temp/{num}{bold}.png"
+    image.save(output_path)
+
+def get_dataset_img(num, background_colour, text_colour, bold=False):
+    image = cv2.imread(f'temp/{num}{bold}.png')
     image = (np.float32(image) / 255.0) * (background_colour - text_colour) + text_colour
     image = np.uint8(image)
 
@@ -169,7 +180,7 @@ def difference_score(input_img, dataset_img):
 
     return best_match_score
 
-def get_number_from_square(img, colours):
+def get_number_from_square(img, colours, max_possible_value):
     best_match_index = None
     best_match_score = np.inf  # Initialize to a value that ensures any real score will be an improvement
 
@@ -202,11 +213,11 @@ def get_number_from_square(img, colours):
 
     #display_image(resized_img)
 
-    for i in range(1, 100):
+    for i in range(1, max_possible_value + 1):
         if np.sum(colour) == 218*3:
             continue
 
-        dataset_img = get_dataset_img(i, colour, [255, 255, 255] if text_is_white else [0,0,0])
+        dataset_img = get_dataset_img(i, colour, [255, 255, 255] if text_is_white else [0,0,0], text_is_white)
 
         #if (np.sum(colour) != 218*3):
         #    display_image(np.uint8(dataset_img))
@@ -228,9 +239,10 @@ def get_number_from_square(img, colours):
         if colours[i][0] == colour[0] and colours[i][1] == colour[1] and colours[i][2] == colour[2]:
             colour_index = i
 
-    #print(f'{best_match_index} with score {best_match_score}, colour: {colour} ({colour_index})')
-    
-    #display_image(resized_img)
+    if False:
+        print(f'{best_match_index} with score {best_match_score}, colour: {colour} ({colour_index})')
+        
+        display_image(resized_img)
 
     #display_image(resized_img, f'Best match: {best_match_index}')
 
