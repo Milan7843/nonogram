@@ -9,7 +9,7 @@ def read_coloured_field_from_image(image, colours_image, num_colours, size, bord
 
     pt.add("reading field")
 
-    generate_dataset_images(99)
+    #generate_dataset_images(99)
     colours = read_colours(colours_image, num_colours)
     
     square_size_y = image.shape[0] / (border[1]+size[1])
