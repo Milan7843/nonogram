@@ -15,20 +15,29 @@ def read_coloured_field_from_image(image, colours_image, num_colours, size, bord
     square_size_y = image.shape[0] / (border[1]+size[1])
     square_size_x = image.shape[1] / (border[0]+size[0])
 
+    #print(f"square size: {square_size_x}x{square_size_y}")
+    default_square_size_x = 19.167
+    default_square_size_y = 18.17647
+    square_ratio_x = square_size_x / default_square_size_x
+    square_ratio_y = square_size_y / default_square_size_y
+    #print(f"square ratio: {square_ratio_x} and {square_ratio_y}")
+    zoom_ratio = (square_ratio_x + square_ratio_y) / 2.0
+    print(f"Zoom: {zoom_ratio}")
+
     # Finding all column values
     columns = []
     for i in range(border[0], border[0]+size[0]):
-        x_min = int(i * square_size_x)+2
+        x_min = int(i * square_size_x)+1
         x_max = int((i+1) * square_size_x)+1
         
         #display_image(image[:, x_min:x_max])
 
         column = []
         for row in range(border[1]):
-            y_min = int(row * square_size_y)+1
+            y_min = int(row * square_size_y)+0
             y_max = int((row+1) * square_size_y)-2
             square = image[y_min:y_max, x_min:x_max]
-            num, color_index = get_number_from_square(square, colours, size[1])
+            num, color_index = get_number_from_square(square, colours, size[1], zoom_ratio)
             if (num != 0):
                 column.append((num, color_index))
         columns.append(column)
@@ -46,7 +55,7 @@ def read_coloured_field_from_image(image, colours_image, num_colours, size, bord
             x_min = int(col * square_size_x)
             x_max = int((col+1) * square_size_x)
             square = image[y_min:y_max, x_min:x_max]
-            num, color_index = get_number_from_square(square, colours, size[0])
+            num, color_index = get_number_from_square(square, colours, size[0], zoom_ratio)
             if (num != 0):
                 row.append((num, color_index))
         rows.append(row)
@@ -180,7 +189,7 @@ def difference_score(input_img, dataset_img):
 
     return best_match_score
 
-def get_number_from_square(img, colours, max_possible_value):
+def get_number_from_square(img, colours, max_possible_value, zoom_ratio):
     best_match_index = None
     best_match_score = np.inf  # Initialize to a value that ensures any real score will be an improvement
 
@@ -206,7 +215,7 @@ def get_number_from_square(img, colours, max_possible_value):
         return 0, 0
     
     # double image size
-    resized_img = cv2.resize(img, (img.shape[1]*2, img.shape[0]*2))
+    resized_img = cv2.resize(img, (np.round(img.shape[1]*2 / zoom_ratio).astype(int), np.round(img.shape[0]*2 / zoom_ratio).astype(int)))
 
     text_is_white = np.mean(img) * 3 > np.sum(colour)
     #print(f"white text: {text_is_white} ({np.mean(img) * 3} vs {np.sum(colour)})")
@@ -218,6 +227,8 @@ def get_number_from_square(img, colours, max_possible_value):
             continue
 
         dataset_img = get_dataset_img(i, colour, [255, 255, 255] if text_is_white else [0,0,0], text_is_white)
+
+        # display_images([resized_img, dataset_img])
 
         #if (np.sum(colour) != 218*3):
         #    display_image(np.uint8(dataset_img))
